@@ -2,7 +2,6 @@ package com.calculatorofthebills.screens.screenOne
 
 import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,6 +35,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import com.calculatorofthebills.CalculatorMainViewModel
 import com.calculatorofthebills.LocalNavControllerProvider
 import com.calculatorofthebills.ui.theme.Background
@@ -47,7 +46,9 @@ import com.calculatorofthebills.util.model.Transaction
 import com.orhanobut.hawk.Hawk
 import org.koin.androidx.compose.koinViewModel
 
-@OptIn(ExperimentalLayoutApi::class)
+private val categories =
+    listOf("All", "Incoming", "Groceries", "Taxi", "Electronics", "Restaurant", "Other")
+
 @Composable
 fun ScreenOne() {
     val navController = LocalNavControllerProvider.current
@@ -60,8 +61,6 @@ fun ScreenOne() {
     val bitcoinRate = thisViewModel.bitcoinRate.collectAsState().value
     val loading = thisViewModel.loading.collectAsState().value
     val transactionList = calculatorMainViewModel.transactionList.collectAsState().value
-
-    val categories = listOf("All", "Incoming", "Groceries", "Taxi", "Electronics", "Restaurant", "Other")
     var selectedCategory by remember { mutableStateOf("All") }
 
     LaunchedEffect(transactionList) {
@@ -82,50 +81,9 @@ fun ScreenOne() {
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            if (loading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-            } else {
-                Text(
-                    text = "Bitcoin Rate: $bitcoinRate USD",
-                    textAlign = TextAlign.End,
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth(),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.fillMaxWidth(0.82f)) {
-                    Text(
-                        text = "Balance:",
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                    Text(
-                        text = "$balance BTC",
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                }
-                Button(onClick = { calculatorMainViewModel.toggleAddDialog() }) {
-                    Text(
-                        text = "+",
-                        style = MaterialTheme.typography.headlineLarge
-                    )
-                }
-            }
-
-            Button(
-                onClick = { navController?.navigate(KeysNavigatorDestinations.screenTwo) },
-                modifier = Modifier.padding(16.dp).align(Alignment.CenterHorizontally)
-            ) {
-                Text(text = "Add Transaction")
-            }
-
+            BitcoinRateBar(loading, bitcoinRate)
+            BalanceBar(balance, calculatorMainViewModel)
+            AddTransactionButton(navController)
             Text(
                 text = "Transactions",
                 style = MaterialTheme.typography.headlineSmall,
@@ -134,67 +92,13 @@ fun ScreenOne() {
                     .padding(16.dp),
                 textAlign = TextAlign.Center
             )
-
-            FlowRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                maxItemsInEachRow = 3,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                categories.forEach { category ->
-                    Button(
-                        onClick = { selectedCategory = category }
-                    ) {
-                        Text(text = category)
-                    }
+            TransactionList(
+                transactionList = transactionList,
+                selectedCategory = selectedCategory,
+                onCategorySelected = { category ->
+                    selectedCategory = category
                 }
-            }
-
-            val filteredTransactions = when (selectedCategory) {
-                "All" -> transactionList.reversed()
-                "Incoming" -> transactionList.reversed().filter { it.amount > 0 }
-                else -> transactionList.reversed().filter { it.category == selectedCategory }
-            }
-
-            var displayedTransactions by remember { mutableStateOf<List<Transaction>>(emptyList()) }
-            val listState = rememberLazyListState()
-
-            LaunchedEffect(filteredTransactions) {
-                displayedTransactions = if (filteredTransactions.isEmpty()) {
-                    emptyList()
-                } else {
-                    filteredTransactions.take(20)
-                }
-            }
-
-            LaunchedEffect(listState.firstVisibleItemIndex) {
-                if (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index == displayedTransactions.size - 1) {
-                    if (displayedTransactions.size < filteredTransactions.size) {
-                        val nextTransactions =
-                            filteredTransactions.drop(displayedTransactions.size).take(20)
-                        displayedTransactions = displayedTransactions + nextTransactions
-                    }
-                }
-            }
-
-            if (displayedTransactions.isEmpty()) {
-                Text(
-                    text = "No transactions available",
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = listState
-                ) {
-                    items(displayedTransactions) { transaction ->
-                        TransactionItem(transaction)
-                    }
-                }
-            }
+            )
         }
 
         if (showAddDialog) {
@@ -202,13 +106,133 @@ fun ScreenOne() {
                 onDismiss = { calculatorMainViewModel.toggleAddDialog() },
                 onAddBalance = { amount ->
                     calculatorMainViewModel.addBalance(
-                        time = System.currentTimeMillis().toString(),
-                        amount = amount
+                        time = System.currentTimeMillis().toString(), amount = amount
                     )
                     calculatorMainViewModel.toggleAddDialog()
-                }
+                })
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun TransactionList(
+    transactionList: List<Transaction>, selectedCategory: String,
+    onCategorySelected: (String) -> Unit
+) {
+    FlowRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        maxItemsInEachRow = 3,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        categories.forEach { category ->
+            Button(onClick = { onCategorySelected(category) }) {
+                Text(text = category)
+            }
+        }
+    }
+
+    val filteredTransactions = when (selectedCategory) {
+        "All" -> transactionList.reversed()
+        "Incoming" -> transactionList.reversed().filter { it.amount > 0 }
+        else -> transactionList.reversed().filter { it.category == selectedCategory }
+    }
+
+    var displayedTransactions by remember { mutableStateOf<List<Transaction>>(emptyList()) }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(filteredTransactions) {
+        displayedTransactions = if (filteredTransactions.isEmpty()) {
+            emptyList()
+        } else {
+            filteredTransactions.take(20)
+        }
+    }
+
+    LaunchedEffect(listState.firstVisibleItemIndex) {
+        if (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index == displayedTransactions.size - 1) {
+            if (displayedTransactions.size < filteredTransactions.size) {
+                val nextTransactions =
+                    filteredTransactions.drop(displayedTransactions.size).take(20)
+                displayedTransactions = displayedTransactions + nextTransactions
+            }
+        }
+    }
+
+    if (displayedTransactions.isEmpty()) {
+        Text(
+            text = "No transactions available",
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(), state = listState
+        ) {
+            items(displayedTransactions) { transaction ->
+                TransactionItem(transaction)
+            }
+        }
+    }
+}
+
+@Composable
+fun AddTransactionButton(navController: NavHostController?) {
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Button(
+            onClick = { navController?.navigate(KeysNavigatorDestinations.screenTwo) },
+            modifier = Modifier
+                .padding(16.dp)
+        ) {
+            Text(text = "Add Transaction")
+        }
+    }
+}
+
+@Composable
+fun BalanceBar(balance: Double, calculatorMainViewModel: CalculatorMainViewModel) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.fillMaxWidth(0.82f)) {
+            Text(
+                text = "Balance:", style = MaterialTheme.typography.headlineSmall
+            )
+            Text(
+                text = "$balance BTC", style = MaterialTheme.typography.headlineSmall
             )
         }
+        Button(onClick = { calculatorMainViewModel.toggleAddDialog() }) {
+            Text(
+                text = "+", style = MaterialTheme.typography.headlineLarge
+            )
+        }
+    }
+}
+
+@Composable
+fun BitcoinRateBar(loading: Boolean, bitcoinRate: String) {
+    if (loading) {
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+    } else {
+        Text(
+            text = "Bitcoin Rate: $bitcoinRate USD",
+            textAlign = TextAlign.End,
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
@@ -217,40 +241,32 @@ fun AddBalanceDialog(onDismiss: () -> Unit, onAddBalance: (Double) -> Unit) {
     var amount by remember { mutableStateOf("") }
     val currentContext = LocalContext.current
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add Balance") },
-        text = {
-            TextField(
-                value = amount,
-                onValueChange = { amount = it },
-                label = { Text("Amount in BTC") },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions.Default.copy(
-                    keyboardType = KeyboardType.Number
-                )
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Add Balance") }, text = {
+        TextField(
+            value = amount,
+            onValueChange = { amount = it },
+            label = { Text("Amount in BTC") },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions.Default.copy(
+                keyboardType = KeyboardType.Number
             )
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val amountValue = amount.toDoubleOrNull()
-                    if (amountValue != null) {
-                        onAddBalance(amountValue)
-                    } else {
-                        Toast.makeText(currentContext, "Invalid Amount", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            ) {
-                Text("Add")
+        )
+    }, confirmButton = {
+        Button(onClick = {
+            val amountValue = amount.toDoubleOrNull()
+            if (amountValue != null) {
+                onAddBalance(amountValue)
+            } else {
+                Toast.makeText(currentContext, "Invalid Amount", Toast.LENGTH_SHORT).show()
             }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) {
-                Text("Cancel")
-            }
+        }) {
+            Text("Add")
         }
-    )
+    }, dismissButton = {
+        Button(onClick = onDismiss) {
+            Text("Cancel")
+        }
+    })
 }
 
 @Composable
