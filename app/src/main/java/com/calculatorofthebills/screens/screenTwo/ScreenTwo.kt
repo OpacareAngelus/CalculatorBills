@@ -27,10 +27,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.calculatorofthebills.CalculatorMainViewModel
 import com.calculatorofthebills.LocalNavControllerProvider
-import com.calculatorofthebills.screens.screenOne.categories
 import com.calculatorofthebills.ui.theme.Background
 import com.calculatorofthebills.util.model.Transaction
 import org.koin.androidx.compose.koinViewModel
+
+private val categories = listOf("Groceries", "Taxi", "Electronics", "Restaurant", "Other")
 
 @Composable
 fun ScreenTwo() {

@@ -2,9 +2,12 @@ package com.calculatorofthebills.screens.screenOne
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -43,8 +47,7 @@ import com.calculatorofthebills.util.model.Transaction
 import com.orhanobut.hawk.Hawk
 import org.koin.androidx.compose.koinViewModel
 
-val categories = listOf("Groceries", "Taxi", "Electronics", "Restaurant", "Other")
-
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ScreenOne() {
     val navController = LocalNavControllerProvider.current
@@ -57,6 +60,9 @@ fun ScreenOne() {
     val bitcoinRate = thisViewModel.bitcoinRate.collectAsState().value
     val loading = thisViewModel.loading.collectAsState().value
     val transactionList = calculatorMainViewModel.transactionList.collectAsState().value
+
+    val categories = listOf("All", "Incoming", "Groceries", "Taxi", "Electronics", "Restaurant", "Other")
+    var selectedCategory by remember { mutableStateOf("All") }
 
     LaunchedEffect(transactionList) {
         Hawk.put(KeysStorage.TRANSACTION_LIST, transactionList)
@@ -115,7 +121,7 @@ fun ScreenOne() {
 
             Button(
                 onClick = { navController?.navigate(KeysNavigatorDestinations.screenTwo) },
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(16.dp).align(Alignment.CenterHorizontally)
             ) {
                 Text(text = "Add Transaction")
             }
@@ -129,33 +135,64 @@ fun ScreenOne() {
                 textAlign = TextAlign.Center
             )
 
-            val allTransactions = transactionList.reversed()
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                maxItemsInEachRow = 3,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                categories.forEach { category ->
+                    Button(
+                        onClick = { selectedCategory = category }
+                    ) {
+                        Text(text = category)
+                    }
+                }
+            }
+
+            val filteredTransactions = when (selectedCategory) {
+                "All" -> transactionList.reversed()
+                "Incoming" -> transactionList.reversed().filter { it.amount > 0 }
+                else -> transactionList.reversed().filter { it.category == selectedCategory }
+            }
+
             var displayedTransactions by remember { mutableStateOf<List<Transaction>>(emptyList()) }
             val listState = rememberLazyListState()
 
-            LaunchedEffect(transactionList) {
-                if (transactionList.isEmpty()) return@LaunchedEffect
-                if (displayedTransactions.isEmpty()) {
-                    displayedTransactions = allTransactions.take(20)
+            LaunchedEffect(filteredTransactions) {
+                displayedTransactions = if (filteredTransactions.isEmpty()) {
+                    emptyList()
+                } else {
+                    filteredTransactions.take(20)
                 }
             }
 
             LaunchedEffect(listState.firstVisibleItemIndex) {
                 if (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index == displayedTransactions.size - 1) {
-                    if (displayedTransactions.size < allTransactions.size) {
+                    if (displayedTransactions.size < filteredTransactions.size) {
                         val nextTransactions =
-                            allTransactions.drop(displayedTransactions.size).take(20)
+                            filteredTransactions.drop(displayedTransactions.size).take(20)
                         displayedTransactions = displayedTransactions + nextTransactions
                     }
                 }
             }
 
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                state = listState
-            ) {
-                items(displayedTransactions) { transaction ->
-                    TransactionItem(transaction)
+            if (displayedTransactions.isEmpty()) {
+                Text(
+                    text = "No transactions available",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState
+                ) {
+                    items(displayedTransactions) { transaction ->
+                        TransactionItem(transaction)
+                    }
                 }
             }
         }
