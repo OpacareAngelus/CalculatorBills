@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Calculatorofthebills</string>
+    <string name="title_activity_calculator_main">CalculatorMainActivity</string>
+</resources>
