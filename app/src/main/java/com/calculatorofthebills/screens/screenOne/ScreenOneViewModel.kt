@@ -1,6 +1,5 @@
 package com.calculatorofthebills.screens.screenOne
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.calculatorofthebills.util.KeysStorage
