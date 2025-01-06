@@ -14,7 +14,11 @@ class CalculatorApplication : Application() {
         super.onCreate()
         Hawk.init(this).build()
         startKoin {
-            modules(appModuleMainViewModel)
+            modules(
+                module {
+                    single { CalculatorMainViewModel() }
+                }
+            )
         }
     }
 }

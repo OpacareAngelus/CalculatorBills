@@ -244,7 +244,11 @@ fun AddBalanceDialog(onDismiss: () -> Unit, onAddBalance: (Double) -> Unit) {
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Add Balance") }, text = {
         TextField(
             value = amount,
-            onValueChange = { amount = it },
+            onValueChange = {
+                if (it.isEmpty() || it.toDoubleOrNull()?.let { it >= 0 } == true) {
+                    amount = it
+                }
+            },
             label = { Text("Amount in BTC") },
             modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions.Default.copy(
