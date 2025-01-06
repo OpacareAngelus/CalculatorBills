@@ -58,7 +58,11 @@ fun ScreenTwo() {
         ) {
             TextField(
                 value = amount,
-                onValueChange = { amount = it },
+                onValueChange = { value ->
+                    if (value.isEmpty() || value.toDoubleOrNull()?.let { it >= 0 } == true) {
+                        amount = value
+                    }
+                },
                 label = { Text("Enter Amount (BTC)") },
                 keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth()
