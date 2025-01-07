@@ -20,11 +20,7 @@ class ScreenOneViewModel : ViewModel() {
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading
 
-    init{
-        checkAndFetchBitcoinRate()
-    }
-
-    private fun checkAndFetchBitcoinRate() = viewModelScope.launch(Dispatchers.IO) {
+    fun checkAndFetchBitcoinRate() = viewModelScope.launch(Dispatchers.IO) {
         _loading.value = true
         try {
             val currentTime = System.currentTimeMillis()

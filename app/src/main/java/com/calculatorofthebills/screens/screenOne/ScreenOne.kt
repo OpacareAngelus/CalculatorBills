@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -36,6 +37,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.calculatorofthebills.CalculatorMainViewModel
@@ -54,6 +58,7 @@ private val categories =
 @Composable
 fun ScreenOne() {
     val navController = LocalNavControllerProvider.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     val calculatorMainViewModel: CalculatorMainViewModel = koinViewModel()
     val thisViewModel: ScreenOneViewModel = viewModel()
@@ -67,6 +72,20 @@ fun ScreenOne() {
 
     LaunchedEffect(balance) {
         Hawk.put(KeysStorage.BALANCE, balance)
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                thisViewModel.checkAndFetchBitcoinRate()
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     Box(
