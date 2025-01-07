@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,7 +44,7 @@ import com.calculatorofthebills.ui.theme.Background
 import com.calculatorofthebills.util.KeysNavigatorDestinations
 import com.calculatorofthebills.util.KeysStorage
 import com.calculatorofthebills.util.formatTimestamp
-import com.calculatorofthebills.util.model.Transaction
+import com.calculatorofthebills.util.room.Transaction
 import com.orhanobut.hawk.Hawk
 import org.koin.androidx.compose.koinViewModel
 
@@ -63,10 +64,6 @@ fun ScreenOne() {
     val loading = thisViewModel.loading.collectAsState().value
     val transactionList = calculatorMainViewModel.transactionList.collectAsState().value
     var selectedCategory by remember { mutableStateOf("All") }
-
-    LaunchedEffect(transactionList) {
-        Hawk.put(KeysStorage.TRANSACTION_LIST, transactionList)
-    }
 
     LaunchedEffect(balance) {
         Hawk.put(KeysStorage.BALANCE, balance)
@@ -98,7 +95,8 @@ fun ScreenOne() {
                 selectedCategory = selectedCategory,
                 onCategorySelected = { category ->
                     selectedCategory = category
-                }
+                },
+                loadMoreTransactions = calculatorMainViewModel::loadMoreTransactions
             )
         }
 
@@ -106,8 +104,12 @@ fun ScreenOne() {
             AddBalanceDialog(
                 onDismiss = { calculatorMainViewModel.toggleAddDialog() },
                 onAddBalance = { amount ->
-                    calculatorMainViewModel.addBalance(
-                        time = System.currentTimeMillis().toString(), amount = amount
+                    calculatorMainViewModel.addTransaction(
+                        Transaction(
+                            time = System.currentTimeMillis(),
+                            amount = amount,
+                            category = "Incoming"
+                        )
                     )
                     calculatorMainViewModel.toggleAddDialog()
                 })
@@ -119,17 +121,22 @@ fun ScreenOne() {
 @Composable
 fun TransactionList(
     transactionList: List<Transaction>, selectedCategory: String,
-    onCategorySelected: (String) -> Unit
+    onCategorySelected: (String) -> Unit, loadMoreTransactions: () -> Unit
 ) {
     FlowRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         maxItemsInEachRow = 3,
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         categories.forEach { category ->
-            Button(onClick = { onCategorySelected(category) }) {
+            Button(
+                onClick = { onCategorySelected(category) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (category == selectedCategory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                )
+            ) {
                 Text(text = category)
             }
         }
@@ -137,34 +144,27 @@ fun TransactionList(
 
     val filteredTransactions = when (selectedCategory) {
         "All" -> transactionList.reversed()
-        "Incoming" -> transactionList.reversed().filter { it.amount > 0 }
+        "Incoming" -> transactionList.reversed().filter { it.category == "Incoming" }
         else -> transactionList.reversed().filter { it.category == selectedCategory }
     }
 
-    var displayedTransactions by remember { mutableStateOf<List<Transaction>>(emptyList()) }
+    var displayedTransactions by remember { mutableStateOf(filteredTransactions) }
     val listState = rememberLazyListState()
 
     LaunchedEffect(filteredTransactions) {
-        displayedTransactions = if (filteredTransactions.isEmpty()) {
-            emptyList()
-        } else {
-            filteredTransactions.take(20)
-        }
+        displayedTransactions = filteredTransactions
     }
 
     val visibleIndex = remember { derivedStateOf { listState.firstVisibleItemIndex } }
 
     LaunchedEffect(visibleIndex.value) {
-        if (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index == displayedTransactions.size - 1) {
-            if (displayedTransactions.size < filteredTransactions.size) {
-                val nextTransactions =
-                    filteredTransactions.drop(displayedTransactions.size).take(20)
-                displayedTransactions = displayedTransactions + nextTransactions
-            }
+        val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
+        if (lastVisibleItem == displayedTransactions.size - 1) {
+            loadMoreTransactions()
         }
     }
 
-    if (displayedTransactions.isEmpty()) {
+    if (filteredTransactions.isEmpty()) {
         Text(
             text = "No transactions available",
             modifier = Modifier.fillMaxWidth(),
@@ -175,7 +175,7 @@ fun TransactionList(
         LazyColumn(
             modifier = Modifier.fillMaxSize(), state = listState
         ) {
-            items(displayedTransactions) { transaction ->
+            items(displayedTransactions.reversed()) { transaction ->
                 TransactionItem(transaction)
             }
         }
@@ -279,7 +279,7 @@ fun AddBalanceDialog(onDismiss: () -> Unit, onAddBalance: (Double) -> Unit) {
 @Composable
 fun TransactionItem(transaction: Transaction) {
     Column(modifier = Modifier.padding(16.dp)) {
-        Text("Time: ${formatTimestamp(transaction.time)}")
+        Text("Time: ${formatTimestamp(transaction.time.toString())}")
         Text("Amount: ${transaction.amount} BTC")
         Text("Category: ${transaction.category}")
     }

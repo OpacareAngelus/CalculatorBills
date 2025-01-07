@@ -28,7 +28,8 @@ import androidx.compose.ui.unit.dp
 import com.calculatorofthebills.CalculatorMainViewModel
 import com.calculatorofthebills.LocalNavControllerProvider
 import com.calculatorofthebills.ui.theme.Background
-import com.calculatorofthebills.util.model.Transaction
+import com.calculatorofthebills.util.KeysNavigatorDestinations
+import com.calculatorofthebills.util.room.Transaction
 import org.koin.androidx.compose.koinViewModel
 
 private val categories = listOf("Groceries", "Taxi", "Electronics", "Restaurant", "Other")
@@ -99,14 +100,12 @@ fun ScreenTwo() {
                                 Toast.LENGTH_SHORT
                             ).show()
                         } else {
-                            calculatorMainViewModel.addTransaction(
-                                Transaction(
-                                    time = System.currentTimeMillis().toString(),
-                                    amount = -amountValue,
-                                    category = selectedCategory
-                                )
-                            )
-                            navController?.popBackStack()
+                            calculatorMainViewModel.addTransaction(Transaction(
+                                time = System.currentTimeMillis(),
+                                amount = -amountValue,
+                                category = selectedCategory
+                            ))
+                            navController?.navigate(KeysNavigatorDestinations.screenOne)
                         }
                     }
                 },
