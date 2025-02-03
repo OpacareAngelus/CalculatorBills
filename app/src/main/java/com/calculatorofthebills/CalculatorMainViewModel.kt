@@ -2,7 +2,9 @@ package com.calculatorofthebills
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.paging.PagingSource
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
 import com.calculatorofthebills.util.KeysStorage
 import com.calculatorofthebills.util.room.Transaction
 import com.calculatorofthebills.util.room.TransactionDao
@@ -10,6 +12,7 @@ import com.orhanobut.hawk.Hawk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -22,8 +25,24 @@ class CalculatorMainViewModel : ViewModel(), KoinComponent {
 
     private val databaseMutex = Mutex()
 
-    private val _transactionList = MutableStateFlow(listOf<Transaction>())
-    val transactionList: StateFlow<List<Transaction>> = _transactionList
+    private val _pager = Pager(
+        config = PagingConfig(
+            pageSize = 10,
+            enablePlaceholders = false,
+            prefetchDistance = 10
+        ),
+        pagingSourceFactory = { transactionDao.getAllTransactionsPaged() }
+    )
+    val pagedItems: MutableStateFlow<PagingData<Transaction>> = MutableStateFlow(PagingData.empty())
+
+    init {
+        viewModelScope.launch {
+            _pager.flow.collectLatest { pagingData ->
+                pagedItems.value = pagingData
+            }
+        }
+    }
+
 
     private val _balance = MutableStateFlow(0.0)
     val balance: StateFlow<Double> = _balance
@@ -33,37 +52,6 @@ class CalculatorMainViewModel : ViewModel(), KoinComponent {
 
     init {
         loadBalance()
-        loadFirst20Transactions()
-    }
-
-    private fun loadFirst20Transactions() = viewModelScope.launch(Dispatchers.IO) {
-        databaseMutex.withLock {
-            val pagingSource = transactionDao.getAllTransactionsPaged(20, 0)
-            val result = pagingSource.load(PagingSource.LoadParams.Refresh(0, 20, false))
-            if (result is PagingSource.LoadResult.Page) {
-                _transactionList.value = result.data
-            }
-        }
-    }
-
-    fun loadMoreTransactions() = viewModelScope.launch(Dispatchers.IO) {
-        val offset = _transactionList.value.size
-        val limit = 20
-
-        databaseMutex.withLock {
-            val pagingSource = transactionDao.getAllTransactionsPaged(limit, offset)
-            val result = pagingSource.load(
-                PagingSource.LoadParams.Refresh(
-                    key = offset,
-                    loadSize = limit,
-                    placeholdersEnabled = false
-                )
-            )
-
-            if (result is PagingSource.LoadResult.Page) {
-                _transactionList.emit(_transactionList.value + result.data)
-            }
-        }
     }
 
     private fun loadBalance() {
@@ -74,7 +62,6 @@ class CalculatorMainViewModel : ViewModel(), KoinComponent {
         _balance.value += transaction.amount
         Hawk.put(KeysStorage.BALANCE, _balance.value)
         insertTransaction(transaction)
-        loadFirst20Transactions()
     }
 
     private fun insertTransaction(transaction: Transaction) {

@@ -8,11 +8,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.LazyPagingItems
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -26,13 +27,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -42,6 +43,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import androidx.paging.LoadState
 import com.calculatorofthebills.CalculatorMainViewModel
 import com.calculatorofthebills.LocalNavControllerProvider
 import com.calculatorofthebills.ui.theme.Background
@@ -67,7 +69,7 @@ fun ScreenOne() {
     val showAddDialog = calculatorMainViewModel.showAddDialog.collectAsState().value
     val bitcoinRate = thisViewModel.bitcoinRate.collectAsState().value
     val loading = thisViewModel.loading.collectAsState().value
-    val transactionList = calculatorMainViewModel.transactionList.collectAsState().value
+    val transactionList = calculatorMainViewModel.pagedItems.collectAsLazyPagingItems()
     var selectedCategory by remember { mutableStateOf("All") }
 
     LaunchedEffect(balance) {
@@ -114,8 +116,7 @@ fun ScreenOne() {
                 selectedCategory = selectedCategory,
                 onCategorySelected = { category ->
                     selectedCategory = category
-                },
-                loadMoreTransactions = calculatorMainViewModel::loadMoreTransactions
+                }
             )
         }
 
@@ -139,8 +140,9 @@ fun ScreenOne() {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TransactionList(
-    transactionList: List<Transaction>, selectedCategory: String,
-    onCategorySelected: (String) -> Unit, loadMoreTransactions: () -> Unit
+    transactionList: LazyPagingItems<Transaction>,
+    selectedCategory: String,
+    onCategorySelected: (String) -> Unit
 ) {
     FlowRow(
         modifier = Modifier
@@ -161,29 +163,9 @@ fun TransactionList(
         }
     }
 
-    val filteredTransactions = when (selectedCategory) {
-        "All" -> transactionList.reversed()
-        "Incoming" -> transactionList.reversed().filter { it.category == "Incoming" }
-        else -> transactionList.reversed().filter { it.category == selectedCategory }
-    }
-
-    var displayedTransactions by remember { mutableStateOf(filteredTransactions) }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(filteredTransactions) {
-        displayedTransactions = filteredTransactions
-    }
-
-    val visibleIndex = remember { derivedStateOf { listState.firstVisibleItemIndex } }
-
-    LaunchedEffect(visibleIndex.value) {
-        val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index
-        if (lastVisibleItem == displayedTransactions.size - 1) {
-            loadMoreTransactions()
-        }
-    }
-
-    if (filteredTransactions.isEmpty()) {
+    if (transactionList.itemCount == 0) {
         Text(
             text = "No transactions available",
             modifier = Modifier.fillMaxWidth(),
@@ -192,10 +174,39 @@ fun TransactionList(
         )
     } else {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(), state = listState
+            modifier = Modifier.fillMaxSize(),
+            state = listState
         ) {
-            items(displayedTransactions.reversed()) { transaction ->
-                TransactionItem(transaction)
+            items(transactionList.itemCount) { index ->
+                val transaction = transactionList[index]
+                if (transaction != null) {
+                    if (selectedCategory == "All" || transaction.category == selectedCategory) {
+                        TransactionItem(transaction)
+                    }
+                }
+            }
+
+            item {
+                when (val state = transactionList.loadState.append) {
+                    is LoadState.Loading -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        )
+                    }
+
+                    is LoadState.Error -> {
+                        Text(
+                            text = "Error loading transactions",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            color = Color.Red
+                        )
+                    }
+
+                    else -> {}
+                }
             }
         }
     }

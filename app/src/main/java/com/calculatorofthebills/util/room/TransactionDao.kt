@@ -10,10 +10,7 @@ import androidx.room.Query
 interface TransactionDao {
 
     @Query("SELECT * FROM transactions ORDER BY time DESC")
-    suspend fun getAllTransactions(): List<Transaction>
-
-    @Query("SELECT * FROM transactions ORDER BY time DESC LIMIT :limit OFFSET :offset")
-    fun getAllTransactionsPaged(limit: Int, offset: Int): PagingSource<Int, Transaction>
+    fun getAllTransactionsPaged(): PagingSource<Int, Transaction>
 
     @Insert
     suspend fun insertTransaction(transaction: Transaction)

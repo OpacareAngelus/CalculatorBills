@@ -9,9 +9,19 @@ navigationCompose = "2.8.3"
 composeBom = "2024.04.01"
 activityCompose = "1.9.3"
 lifecycleRuntimeKtx = "2.8.7"
+pagingCompose = "3.3.5"
 retrofit = "2.9.0"
+roomRuntime = "2.6.1"
+roomCompiler = "2.6.1"
+roomKtx = "2.6.1"
+roomPaging = "2.6.1"
 
 [libraries]
+androidx-paging-compose = { module = "androidx.paging:paging-compose", version.ref = "pagingCompose" }
+androidx-room-paging = { module = "androidx.room:room-paging", version.ref = "roomPaging" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "roomKtx" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "roomCompiler" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomRuntime" }
 converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "converterGson" }
 hawk = { module = "com.orhanobut:hawk", version.ref = "hawk" }
 koin-androidx-compose = { module = "io.insert-koin:koin-androidx-compose", version.ref = "koinAndroidxCompose" }
